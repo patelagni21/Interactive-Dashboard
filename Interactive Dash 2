@@ -1,0 +1,70 @@
+from dash import Dash, Input, Output, callback, dash_table, State
+import dash_bootstrap_components as dbc
+from dash import Dash, dash_table, html
+import pandas as pd
+import os
+import ibm_db
+import ibm_db_dbi
+
+
+
+
+
+# dsn = open("Freelance\\dashb\\dsn.txt", "r").read()
+
+
+try:
+    # conn = ibm_db.connect("FEDDB", "agnipate", "Pat04861!")
+    conn = ibm_db.connect("""DATABASE=FEDDB;HOSTNAME=f32pxap420.f32prod.mfg.intel.com;
+                            PORT=50001;AUTHENTICATION=SERVER;PROTOCOL=TCPIP;UID=agnipate;PWD=Pat04861!;""", "", "")
+    print ("Connected to database") # , dsn_database, "as user: ", dsn_uid, "on host: ", dsn_hostname)
+
+except:
+    print ("Unable to connect: ", ibm_db.conn_errormsg() )
+
+
+pconn = ibm_db_dbi.Connection(conn)
+#print the connection string to check correct values are specified
+
+df = pd.read_sql("SELECT facility, operation, latest_version from ZWB10972.AFO", pconn)
+
+data = list(df.fillna("").transpose().to_dict().values())
+
+
+app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+
+app.layout = html.Div([
+
+    dbc.Row([
+        dbc.Col(width=1),
+        dbc.Col([
+            dash_table.DataTable(
+                columns=[{"id":i, "name":i} for i in df.columns],
+                data=data,
+                id="main-table",
+                editable=True,
+                row_deletable=True,
+                page_action='none',
+                fixed_rows={'headers': True},
+            style_table={'height': '500px', 'overflowY': 'auto'})
+        ], width=10),
+        dbc.Col(width=1)
+    ]),
+    dbc.Row(html.Button('Add Row', id='editing-rows-button', n_clicks=0)),
+    dbc.Row(html.Button('Update Table', id='update-table-button', n_clicks=0))
+])
+
+@app.callback(
+    Output('main-table', 'data'),
+    Input('editing-rows-button', 'n_clicks'),
+    State('main-table', 'data'),
+    State('main-table', 'columns'))
+
+def add_row(n_clicks, rows, columns):
+    if n_clicks > 0:
+        rows.append({c['id']: '' for c in columns})
+    return rows
+
+
+if __name__ == "__main__":
+    app.run_server(debug=True)

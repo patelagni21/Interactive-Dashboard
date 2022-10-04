@@ -1,0 +1,129 @@
+from dash import Dash, Input, Output, callback, dash_table, State, ctx
+import dash_bootstrap_components as dbc
+from dash import Dash, dash_table, html
+import pandas as pd
+import os
+import ibm_db
+import ibm_db_dbi
+from datetime import datetime
+
+
+
+
+# dsn = open("Freelance\\dashb\\dsn.txt", "r").read()
+# 
+# 
+# try:
+#     conn = ibm_db.connect(dsn, "", "")
+#     print ("Connected to database") # , dsn_database, "as user: ", dsn_uid, "on host: ", dsn_hostname)
+# 
+# except:
+#     print ("Unable to connect: ", ibm_db.conn_errormsg() )
+
+
+# pconn = ibm_db_dbi.Connection(conn)
+#print the connection string to check correct values are specified
+
+# df = pd.read_sql("SELECT facility, operation, latest_version from ZWB10972.AFO", pconn)
+
+df = pd.read_csv("Freelance\\dashb\\WITH_ae_AS_SELECT_facility_lot_operation_CASE_WHEN_Tag_history_T_202207231404.csv")
+
+
+data = list(df.fillna("").transpose().to_dict().values())
+
+
+app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+
+print(df.columns)
+
+
+app.layout = html.Div([
+
+    html.Br(),
+
+    dbc.Row(html.H1("Production Monitoring", style={"text-align": "center", "color": "black"})),
+
+    dbc.Row([
+        dbc.Row(html.Br()),
+        dbc.Col(width=0),
+        dbc.Col([
+            dash_table.DataTable(
+                columns=[{"id":i, "name":i} for i in df.columns],
+                data=data,
+                id="main-table",
+                editable=True,
+                row_deletable=True,
+                style_table={'height': '500px', 'overflowY': 'auto'},
+                page_action='none',
+
+                # fixed_rows={'headers': True},
+                style_header={"border":"1px solid grey",
+                              "color":"black", 
+                              "font-family":"Arial",
+                              "text-align":"center"},
+                style_data = {"border":"1px solid grey",
+                              "color":"black", 
+                              "font-family":"Arial"},
+                tooltip_header={i: i for i in df.columns},
+                tooltip_delay=0,
+                css=[{
+                            'selector': '.dash-table-tooltip',
+                            'rule': '''background-color: #white; 
+                                       font-family: "Arial"; 
+                                       color: #black; 
+                                       text-align:center; 
+                                       vertical-align:middle ; 
+                                              '''
+                        }]
+                ),
+            dbc.Row([
+            dbc.Col(html.Button('Add Row', id='editing-rows-button', n_clicks=0, style={"width":"100%"}), width=6),
+            dbc.Col(html.Button('Update Table', id='update-table-button', n_clicks=0, style={"width":"100%"}), width=6)
+        ]),
+        html.Br(),
+        dbc.Row(html.Button("Refresh Data", id="refresh-button")),
+        dbc.Row(html.H1(id="update-status", style={"color":"green"}))
+        ], width=12),
+        html.H1(id="refresh-time"),
+        dbc.Col(width=0)
+    ])
+])
+
+@app.callback(
+    Output('main-table', 'data'),
+    Input('editing-rows-button', 'n_clicks'),
+    State('main-table', 'data'),
+    State('main-table', 'columns'))
+
+def add_row(n_clicks, rows,  columns):
+    if n_clicks > 0:
+        rows.insert(0, {c['id']: '' for c in columns})
+        
+    return rows
+
+
+@app.callback(
+    Output("update-status", "children"),
+    Input('main-table', 'data'),
+    Input('update-table-button', "n_clicks"),
+    Input('main-table', 'active_cell')
+)
+def update(data, n_clicks1, ac):
+    if n_clicks1 > 0:
+        pd.DataFrame(data).to_csv("output.csv")
+        return "Data Saved" # + str(ac)
+    # return str(ac)
+
+@app.callback(
+    Output("refresh-time", "children"),
+    Input('refresh-button', "n_clicks"),
+)
+def update(n_clicks):
+    now = datetime.now()
+
+    current_time = now.strftime("%H:%M:%S")
+    return "last update:" + current_time
+    
+
+if __name__ == "__main__":
+    app.run_server(debug=True)
